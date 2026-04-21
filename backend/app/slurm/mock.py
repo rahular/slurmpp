@@ -11,14 +11,30 @@ from app.slurm.models import FairShare, Job, JobSubmitRequest, Node, Partition
 _submitted_jobs: list[Job] = []
 _next_job_id = 1000
 
-_DEMO_JOBS = [
+_now = datetime.utcnow()
+
+# Per-job fixed efficiency so dashboard always shows realistic variety
+_JOB_STATS: dict[int, dict] = {
+    # Efficient running jobs
+    1001: {"cpu_efficiency": 91.2, "memory_rss_mb": 28400, "gpu_util_pct": 94.5},
+    1002: {"cpu_efficiency": 87.6, "memory_rss_mb": 58000, "gpu_util_pct": 89.1},
+    # Inefficient running jobs (will appear in admin low-efficiency view)
+    1003: {"cpu_efficiency": 18.4, "memory_rss_mb": 4200,  "gpu_util_pct": None},
+    1004: {"cpu_efficiency": 31.0, "memory_rss_mb": 12800, "gpu_util_pct": None},
+    1005: {"cpu_efficiency": 8.2,  "memory_rss_mb": 620,   "gpu_util_pct": None},
+    1009: {"cpu_efficiency": 22.5, "memory_rss_mb": 890,   "gpu_util_pct": 12.3},
+    1010: {"cpu_efficiency": 44.8, "memory_rss_mb": 16200, "gpu_util_pct": None},
+}
+
+_DEMO_JOBS: list[Job] = [
+    # ── RUNNING — efficient ──────────────────────────────────────────────────
     Job(
         job_id=1001, user="alice", account="ml-lab", partition="gpu",
         name="train-resnet50", state="RUNNING",
         num_cpus=8, num_nodes=1, num_gpus=2, memory_mb=32768,
         time_limit_seconds=14400,
-        submit_time=datetime.utcnow() - timedelta(hours=2, minutes=13),
-        start_time=datetime.utcnow() - timedelta(hours=2, minutes=10),
+        submit_time=_now - timedelta(hours=2, minutes=13),
+        start_time=_now - timedelta(hours=2, minutes=10),
         std_out="/scratch/alice/slurm-1001.out",
         work_dir="/home/alice/projects/resnet",
         qos="gpu-normal",
@@ -28,19 +44,20 @@ _DEMO_JOBS = [
         name="finetune-bert-large", state="RUNNING",
         num_cpus=4, num_nodes=1, num_gpus=4, memory_mb=65536,
         time_limit_seconds=28800,
-        submit_time=datetime.utcnow() - timedelta(hours=1, minutes=45),
-        start_time=datetime.utcnow() - timedelta(hours=1, minutes=42),
+        submit_time=_now - timedelta(hours=1, minutes=45),
+        start_time=_now - timedelta(hours=1, minutes=42),
         std_out="/scratch/alice/slurm-1002.out",
         work_dir="/home/alice/projects/bert",
         qos="gpu-normal",
     ),
+    # ── RUNNING — inefficient (CPU waste) ───────────────────────────────────
     Job(
         job_id=1003, user="bob", account="genomics", partition="general",
         name="preprocess-fastq", state="RUNNING",
         num_cpus=16, num_nodes=1, num_gpus=0, memory_mb=131072,
         time_limit_seconds=7200,
-        submit_time=datetime.utcnow() - timedelta(minutes=55),
-        start_time=datetime.utcnow() - timedelta(minutes=50),
+        submit_time=_now - timedelta(minutes=55),
+        start_time=_now - timedelta(minutes=50),
         std_out="/scratch/bob/slurm-1003.out",
         work_dir="/data/genomics/project-alpha",
         qos="normal",
@@ -50,8 +67,8 @@ _DEMO_JOBS = [
         name="mpi-md-simulation", state="RUNNING",
         num_cpus=64, num_nodes=4, num_gpus=0, memory_mb=262144,
         time_limit_seconds=43200,
-        submit_time=datetime.utcnow() - timedelta(hours=3, minutes=20),
-        start_time=datetime.utcnow() - timedelta(hours=3, minutes=18),
+        submit_time=_now - timedelta(hours=3, minutes=20),
+        start_time=_now - timedelta(hours=3, minutes=18),
         std_out="/scratch/bob/slurm-1004.out",
         work_dir="/home/bob/md-sim",
         qos="high-priority",
@@ -61,19 +78,43 @@ _DEMO_JOBS = [
         name="postprocess-results", state="RUNNING",
         num_cpus=2, num_nodes=1, num_gpus=0, memory_mb=8192,
         time_limit_seconds=1800,
-        submit_time=datetime.utcnow() - timedelta(minutes=20),
-        start_time=datetime.utcnow() - timedelta(minutes=18),
+        submit_time=_now - timedelta(minutes=20),
+        start_time=_now - timedelta(minutes=18),
         std_out="/scratch/charlie/slurm-1005.out",
         work_dir="/home/charlie/analysis",
         qos="debug",
     ),
+    # ── RUNNING — inefficient (GPU waste + low CPU) ─────────────────────────
+    Job(
+        job_id=1009, user="dana", account="chem", partition="gpu",
+        name="mol-dynamics-gpu", state="RUNNING",
+        num_cpus=8, num_nodes=1, num_gpus=4, memory_mb=32768,
+        time_limit_seconds=28800,
+        submit_time=_now - timedelta(hours=1, minutes=5),
+        start_time=_now - timedelta(hours=1),
+        std_out="/scratch/dana/slurm-1009.out",
+        work_dir="/home/dana/mol-sim",
+        qos="gpu-normal",
+    ),
+    Job(
+        job_id=1010, user="eve", account="bioinf", partition="general",
+        name="blast-search", state="RUNNING",
+        num_cpus=32, num_nodes=2, num_gpus=0, memory_mb=131072,
+        time_limit_seconds=14400,
+        submit_time=_now - timedelta(minutes=40),
+        start_time=_now - timedelta(minutes=38),
+        std_out="/scratch/eve/slurm-1010.out",
+        work_dir="/data/bioinf/blast",
+        qos="normal",
+    ),
+    # ── PENDING ──────────────────────────────────────────────────────────────
     Job(
         job_id=1006, user="alice", account="ml-lab", partition="gpu",
         name="hyperparameter-sweep", state="PENDING",
         state_reason="Resources",
         num_cpus=32, num_nodes=4, num_gpus=8, memory_mb=131072,
         time_limit_seconds=86400,
-        submit_time=datetime.utcnow() - timedelta(minutes=5),
+        submit_time=_now - timedelta(minutes=5),
         qos="gpu-high",
     ),
     Job(
@@ -82,7 +123,7 @@ _DEMO_JOBS = [
         state_reason="Priority",
         num_cpus=128, num_nodes=8, num_gpus=0, memory_mb=524288,
         time_limit_seconds=172800,
-        submit_time=datetime.utcnow() - timedelta(minutes=12),
+        submit_time=_now - timedelta(minutes=12),
         qos="high-priority",
     ),
     Job(
@@ -91,7 +132,119 @@ _DEMO_JOBS = [
         state_reason="Resources",
         num_cpus=32, num_nodes=2, num_gpus=0, memory_mb=65536,
         time_limit_seconds=28800,
-        submit_time=datetime.utcnow() - timedelta(minutes=3),
+        submit_time=_now - timedelta(minutes=3),
+        qos="normal",
+    ),
+    # ── COMPLETED ────────────────────────────────────────────────────────────
+    Job(
+        job_id=1011, user="alice", account="ml-lab", partition="gpu",
+        name="eval-checkpoint-42", state="COMPLETED",
+        num_cpus=4, num_nodes=1, num_gpus=1, memory_mb=16384,
+        time_limit_seconds=3600,
+        submit_time=_now - timedelta(hours=5),
+        start_time=_now - timedelta(hours=4, minutes=58),
+        end_time=_now - timedelta(hours=4, minutes=2),
+        std_out="/scratch/alice/slurm-1011.out",
+        work_dir="/home/alice/projects/resnet",
+        qos="gpu-normal",
+    ),
+    Job(
+        job_id=1012, user="bob", account="genomics", partition="general",
+        name="trim-reads", state="COMPLETED",
+        num_cpus=8, num_nodes=1, num_gpus=0, memory_mb=32768,
+        time_limit_seconds=1800,
+        submit_time=_now - timedelta(hours=3),
+        start_time=_now - timedelta(hours=2, minutes=59),
+        end_time=_now - timedelta(hours=2, minutes=30),
+        std_out="/scratch/bob/slurm-1012.out",
+        work_dir="/data/genomics/project-alpha",
+        qos="normal",
+    ),
+    Job(
+        job_id=1013, user="charlie", account="physics", partition="general",
+        name="monte-carlo-run-3", state="COMPLETED",
+        num_cpus=32, num_nodes=2, num_gpus=0, memory_mb=65536,
+        time_limit_seconds=7200,
+        submit_time=_now - timedelta(hours=10),
+        start_time=_now - timedelta(hours=9, minutes=55),
+        end_time=_now - timedelta(hours=7, minutes=10),
+        std_out="/scratch/charlie/slurm-1013.out",
+        work_dir="/home/charlie/mc-sims",
+        qos="normal",
+    ),
+    Job(
+        job_id=1014, user="eve", account="bioinf", partition="gpu",
+        name="alphafold-small", state="COMPLETED",
+        num_cpus=16, num_nodes=1, num_gpus=2, memory_mb=98304,
+        time_limit_seconds=21600,
+        submit_time=_now - timedelta(hours=8),
+        start_time=_now - timedelta(hours=7, minutes=58),
+        end_time=_now - timedelta(hours=3, minutes=45),
+        std_out="/scratch/eve/slurm-1014.out",
+        work_dir="/data/bioinf/alphafold",
+        qos="gpu-normal",
+    ),
+    # ── FAILED ───────────────────────────────────────────────────────────────
+    Job(
+        job_id=1015, user="bob", account="genomics", partition="general",
+        name="oom-aligner", state="FAILED",
+        num_cpus=16, num_nodes=1, num_gpus=0, memory_mb=32768,
+        time_limit_seconds=3600,
+        submit_time=_now - timedelta(hours=6),
+        start_time=_now - timedelta(hours=5, minutes=58),
+        end_time=_now - timedelta(hours=5, minutes=10),
+        std_out="/scratch/bob/slurm-1015.out",
+        work_dir="/data/genomics/bwamem",
+        qos="normal",
+    ),
+    Job(
+        job_id=1016, user="dana", account="chem", partition="gpu",
+        name="cuda-oom-test", state="FAILED",
+        num_cpus=4, num_nodes=1, num_gpus=2, memory_mb=16384,
+        time_limit_seconds=7200,
+        submit_time=_now - timedelta(hours=12),
+        start_time=_now - timedelta(hours=11, minutes=55),
+        end_time=_now - timedelta(hours=11, minutes=40),
+        std_out="/scratch/dana/slurm-1016.out",
+        work_dir="/home/dana/cuda-tests",
+        qos="gpu-normal",
+    ),
+    # ── CANCELLED ────────────────────────────────────────────────────────────
+    Job(
+        job_id=1017, user="alice", account="ml-lab", partition="gpu",
+        name="wrong-config-run", state="CANCELLED",
+        num_cpus=16, num_nodes=1, num_gpus=4, memory_mb=65536,
+        time_limit_seconds=86400,
+        submit_time=_now - timedelta(hours=4),
+        start_time=_now - timedelta(hours=3, minutes=55),
+        end_time=_now - timedelta(hours=3, minutes=50),
+        std_out="/scratch/alice/slurm-1017.out",
+        work_dir="/home/alice/projects/experiment",
+        qos="gpu-normal",
+    ),
+    Job(
+        job_id=1018, user="charlie", account="physics", partition="general",
+        name="timeout-sim", state="CANCELLED",
+        num_cpus=64, num_nodes=4, num_gpus=0, memory_mb=262144,
+        time_limit_seconds=3600,
+        submit_time=_now - timedelta(hours=7),
+        start_time=_now - timedelta(hours=6, minutes=58),
+        end_time=_now - timedelta(hours=5, minutes=58),
+        std_out="/scratch/charlie/slurm-1018.out",
+        work_dir="/home/charlie/sims",
+        qos="normal",
+    ),
+    # ── TIMEOUT ──────────────────────────────────────────────────────────────
+    Job(
+        job_id=1019, user="eve", account="bioinf", partition="general",
+        name="metagenome-assembly", state="TIMEOUT",
+        num_cpus=32, num_nodes=2, num_gpus=0, memory_mb=131072,
+        time_limit_seconds=43200,
+        submit_time=_now - timedelta(hours=16),
+        start_time=_now - timedelta(hours=15, minutes=55),
+        end_time=_now - timedelta(hours=3, minutes=55),
+        std_out="/scratch/eve/slurm-1019.out",
+        work_dir="/data/bioinf/metagenome",
         qos="normal",
     ),
 ]
@@ -103,7 +256,7 @@ _DEMO_NODES = [
     Node(name="cpu01", state="allocated", cpus_total=64, cpus_allocated=64, memory_mb=262144, memory_allocated_mb=262144, partitions=["general"]),
     Node(name="cpu02", state="allocated", cpus_total=64, cpus_allocated=64, memory_mb=262144, memory_allocated_mb=262144, partitions=["general"]),
     Node(name="cpu03", state="allocated", cpus_total=64, cpus_allocated=48, memory_mb=262144, memory_allocated_mb=131072, partitions=["general"]),
-    Node(name="cpu04", state="idle", cpus_total=64, cpus_allocated=0, memory_mb=262144, memory_allocated_mb=0, partitions=["general"]),
+    Node(name="cpu04", state="allocated", cpus_total=64, cpus_allocated=12, memory_mb=262144, memory_allocated_mb=32768, partitions=["general"]),
     Node(name="cpu05", state="idle", cpus_total=64, cpus_allocated=0, memory_mb=262144, memory_allocated_mb=0, partitions=["general"]),
     Node(name="cpu06", state="down", cpus_total=64, cpus_allocated=0, memory_mb=262144, memory_allocated_mb=0, reason="not responding", partitions=["general"]),
     Node(name="cpu07", state="drain", cpus_total=64, cpus_allocated=0, memory_mb=262144, memory_allocated_mb=0, reason="scheduled maintenance", partitions=["general"]),
@@ -185,8 +338,13 @@ async def submit_job(req: JobSubmitRequest, as_user: str | None = None) -> int:
     return job_id
 
 
+async def create_cluster_user(username: str, account: str = "default") -> None:
+    """Mock: no-op since there's no real cluster."""
+    pass
+
+
 async def get_fairshare(user: str) -> FairShare:
-    fs = {"alice": 0.72, "bob": 0.45, "charlie": 0.88, "dana": 0.31}
+    fs = {"alice": 0.72, "bob": 0.45, "charlie": 0.88, "dana": 0.31, "eve": 0.60}
     return FairShare(
         user=user,
         account="ml-lab",
@@ -196,14 +354,13 @@ async def get_fairshare(user: str) -> FairShare:
 
 
 async def get_accounting(start_time: str, end_time: str) -> list[dict]:
-    from datetime import datetime
     jobs = []
-    users = ["alice", "bob", "charlie", "dana"]
+    users = ["alice", "bob", "charlie", "dana", "eve"]
     partitions = ["gpu", "general", "debug"]
     for i in range(50):
         cpus = random.choice([1, 2, 4, 8, 16, 32])
         elapsed = random.randint(300, 86400)
-        submit_ts = int((datetime.utcnow() - timedelta(hours=random.randint(1, 168))).timestamp())
+        submit_ts = int((_now - timedelta(hours=random.randint(1, 168))).timestamp())
         jobs.append({
             "job_id": 900 + i,
             "user": random.choice(users),
@@ -219,11 +376,15 @@ async def get_accounting(start_time: str, end_time: str) -> list[dict]:
 
 
 async def get_job_stats(job_id: int) -> dict:
-    for j in _DEMO_JOBS + _submitted_jobs:
+    stats = _JOB_STATS.get(job_id)
+    if stats:
+        return stats
+    # For dynamically submitted running jobs, return decent stats
+    for j in _submitted_jobs:
         if j.job_id == job_id and j.state == "RUNNING":
             return {
-                "cpu_efficiency": round(random.uniform(55, 95), 1),
-                "memory_rss_mb": round(random.uniform(512, j.memory_mb * 0.8 / 1024), 1) if j.memory_mb else None,
-                "gpu_util_pct": round(random.uniform(60, 98), 1) if j.num_gpus else None,
+                "cpu_efficiency": round(random.uniform(70, 95), 1),
+                "memory_rss_mb": round(random.uniform(512, (j.memory_mb or 4096) * 0.8 / 1024), 1),
+                "gpu_util_pct": round(random.uniform(75, 98), 1) if (j.num_gpus or 0) > 0 else None,
             }
     return {"cpu_efficiency": None, "memory_rss_mb": None, "gpu_util_pct": None}

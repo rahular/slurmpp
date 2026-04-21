@@ -67,6 +67,7 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     role: str = "user"
+    account: str = "default"
 
 
 @router.get("/list-users")
@@ -89,11 +90,24 @@ async def create_user(
 ):
     from app.auth.service import hash_password
     from app.db.crud import get_user, create_user as db_create_user
+    from app.slurm.client import get_client
     existing = await get_user(db, body.username)
     if existing:
         raise HTTPException(status_code=409, detail="User already exists")
     user = await db_create_user(db, body.username, hash_password(body.password), body.role)
-    return {"data": {"username": user.username, "role": user.role}}
+
+    # Also provision user on the Slurm cluster
+    slurm_provisioned = False
+    slurm_error: str | None = None
+    try:
+        await get_client().create_cluster_user(body.username, account=getattr(body, "account", "default") or "default")
+        slurm_provisioned = True
+    except Exception as e:
+        slurm_error = str(e)
+
+    return {"data": {"username": user.username, "role": user.role,
+                     "slurm_provisioned": slurm_provisioned,
+                     "slurm_error": slurm_error}}
 
 
 @router.delete("/users/{username}", status_code=204)

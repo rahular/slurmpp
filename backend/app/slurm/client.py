@@ -101,6 +101,12 @@ class SlurmClient:
             return await rest.get_partitions()
         return await cli.get_partitions()
 
+    async def create_cluster_user(self, username: str, account: str = "default") -> None:
+        if self._adapter == "mock":
+            await mock.create_cluster_user(username, account)
+        else:
+            await cli.create_cluster_user(username, account)
+
     async def get_job_stats(self, job_id: int) -> dict:
         if self._adapter == "mock":
             return await mock.get_job_stats(job_id)

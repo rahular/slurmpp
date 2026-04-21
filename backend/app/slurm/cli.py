@@ -229,6 +229,27 @@ async def submit_job(req: JobSubmitRequest, as_user: str | None = None) -> int:
         os.unlink(script_path)
 
 
+async def create_cluster_user(username: str, account: str = "default") -> None:
+    """Create a Linux user and register them in Slurm accounting."""
+    # Create Linux user (no login shell, no home dir creation needed for HPC)
+    try:
+        await _run(["useradd", "--create-home", "--shell", "/bin/bash", username])
+    except RuntimeError as e:
+        if "already exists" not in str(e):
+            raise
+
+    # Add Slurm account if it doesn't exist
+    try:
+        await _run(["sacctmgr", "-i", "add", "account", account,
+                    "Description=User account", "Organization=cluster"])
+    except RuntimeError:
+        pass  # account may already exist
+
+    # Add user to Slurm accounting under the account
+    await _run(["sacctmgr", "-i", "add", "user", username,
+                "Account=" + account, "DefaultAccount=" + account])
+
+
 async def get_fairshare(user: str) -> FairShare:
     try:
         stdout = await _run(["sshare", "-u", user, "--parsable2", "-l"])
