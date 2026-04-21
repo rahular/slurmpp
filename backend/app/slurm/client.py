@@ -101,6 +101,13 @@ class SlurmClient:
             return await rest.get_partitions()
         return await cli.get_partitions()
 
+    async def get_job_stats(self, job_id: int) -> dict:
+        if self._adapter == "mock":
+            return await mock.get_job_stats(job_id)
+        if self._adapter == "rest":
+            return await cli.get_job_stats(job_id)  # REST adapter doesn't have sstat, fall back to CLI
+        return await cli.get_job_stats(job_id)
+
     # ── Accounting ────────────────────────────────────────────────────────────
 
     async def get_fairshare(self, user: str) -> FairShare:

@@ -51,7 +51,7 @@ async def get_jobs(user: str | None = None) -> list[Job]:
         jobs.append(Job(
             job_id=j["job_id"],
             array_job_id=j.get("array_job_id") or None,
-            array_task_id=j.get("array_task_id") if j.get("array_task_id", -1) >= 0 else None,
+            array_task_id=j.get("array_task_id") if isinstance(j.get("array_task_id"), int) and j.get("array_task_id") >= 0 else None,
             user=j.get("user_name", ""),
             account=j.get("account", ""),
             partition=j.get("partition", ""),
@@ -265,3 +265,41 @@ async def get_accounting(start_time: str, end_time: str) -> list[dict]:
         return raw.get("jobs", [])
     except Exception:
         return []
+
+
+async def get_job_stats(job_id: int) -> dict:
+    """Get live resource utilization for a running job via sstat."""
+    stats: dict = {"cpu_efficiency": None, "memory_rss_mb": None, "gpu_util_pct": None}
+    try:
+        stdout = await _run([
+            "sstat", "-j", str(job_id),
+            "--format=JobID,AveCPU,MaxRSS,TRESUsageInTot",
+            "--parsable2", "--noheader", "-a",
+        ])
+        lines = [l for l in stdout.strip().splitlines() if l and ".batch" in l]
+        if lines:
+            parts = lines[0].split("|")
+            # MaxRSS: e.g. "1024K" or "256M"
+            rss_str = parts[2].strip() if len(parts) > 2 else ""
+            if rss_str.endswith("K"):
+                stats["memory_rss_mb"] = round(int(rss_str[:-1]) / 1024, 1)
+            elif rss_str.endswith("M"):
+                stats["memory_rss_mb"] = round(float(rss_str[:-1]), 1)
+            elif rss_str.endswith("G"):
+                stats["memory_rss_mb"] = round(float(rss_str[:-1]) * 1024, 1)
+    except Exception:
+        pass
+
+    # GPU utilization via nvidia-smi if available
+    try:
+        nvidia_out = await _run([
+            "nvidia-smi", "--query-gpu=utilization.gpu",
+            "--format=csv,noheader,nounits"
+        ])
+        vals = [int(v.strip()) for v in nvidia_out.strip().splitlines() if v.strip().isdigit()]
+        if vals:
+            stats["gpu_util_pct"] = round(sum(vals) / len(vals), 1)
+    except Exception:
+        pass
+
+    return stats

@@ -1,9 +1,24 @@
 import { useState } from 'react'
-import { getNodeColor } from '@/lib/utils'
 import type { NodeInfo } from '@/api/cluster'
 
 interface Props {
   nodes: NodeInfo[]
+}
+
+function getNodeDisplayColor(node: NodeInfo): string {
+  const lower = node.state.toLowerCase()
+  if (lower.includes('down') || lower.includes('error')) return '#ef4444'
+  if (lower.includes('drain')) return '#a855f7'
+  if (lower.includes('idle')) return '#22c55e'
+  // For allocated/mix nodes, use utilization ratio
+  if (node.cpus_total > 0) {
+    const ratio = node.cpus_allocated / node.cpus_total
+    if (ratio >= 0.9) return '#f97316'       // orange - mostly full
+    if (ratio >= 0.5) return '#eab308'       // yellow - partial
+    if (ratio > 0) return '#84cc16'          // lime green - lightly used
+  }
+  if (lower.includes('alloc') || lower.includes('mix')) return '#f97316'
+  return '#6b7280'
 }
 
 export default function NodeGrid({ nodes }: Props) {
@@ -20,8 +35,8 @@ export default function NodeGrid({ nodes }: Props) {
           <div
             key={node.name}
             className="w-5 h-5 rounded-sm cursor-pointer transition-transform hover:scale-125"
-            style={{ backgroundColor: getNodeColor(node.state) }}
-            title={`${node.name} — ${node.state}`}
+            style={{ backgroundColor: getNodeDisplayColor(node) }}
+            title={`${node.name} — ${node.state} (${node.cpus_allocated}/${node.cpus_total} CPUs)`}
             onMouseEnter={() => setHovered(node)}
             onMouseLeave={() => setHovered(null)}
           />
@@ -43,8 +58,9 @@ export default function NodeGrid({ nodes }: Props) {
       <div className="flex gap-4 mt-3 flex-wrap">
         {[
           { label: 'idle', color: '#22c55e' },
-          { label: 'allocated', color: '#f97316' },
-          { label: 'mixed', color: '#eab308' },
+          { label: 'light use (<50%)', color: '#84cc16' },
+          { label: 'partial (50-90%)', color: '#eab308' },
+          { label: 'full (>90%)', color: '#f97316' },
           { label: 'down', color: '#ef4444' },
           { label: 'drain', color: '#a855f7' },
         ].map(({ label, color }) => (

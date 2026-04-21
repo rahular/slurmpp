@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useSubmitJob } from '@/api/jobs'
 import { usePartitions } from '@/api/cluster'
 import ScriptEditor from '@/components/submit/ScriptEditor'
@@ -17,23 +17,25 @@ const STEPS = ['Resources', 'Script', 'Review']
 
 export default function SubmitPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { data: partitionsData } = usePartitions()
   const submit = useSubmitJob()
   const [step, setStep] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   // Form state
-  const [jobName, setJobName] = useState('my-job')
-  const [partition, setPartition] = useState('')
-  const [numNodes, setNumNodes] = useState(1)
+  const _cloneTimeSec = parseInt(searchParams.get('time_limit') || '3600')
+  const [jobName, setJobName] = useState(searchParams.get('job_name') || 'my-job')
+  const [partition, setPartition] = useState(searchParams.get('partition') || '')
+  const [numNodes, setNumNodes] = useState(parseInt(searchParams.get('num_nodes') || '1'))
   const [numTasks, setNumTasks] = useState(1)
-  const [numCpus, setNumCpus] = useState(1)
-  const [numGpus, setNumGpus] = useState(0)
-  const [memoryMb, setMemoryMb] = useState(0)
-  const [hours, setHours] = useState(1)
-  const [minutes, setMinutes] = useState(0)
-  const [account, setAccount] = useState('')
-  const [qos, setQos] = useState('')
+  const [numCpus, setNumCpus] = useState(parseInt(searchParams.get('num_cpus') || '1'))
+  const [numGpus, setNumGpus] = useState(parseInt(searchParams.get('num_gpus') || '0'))
+  const [memoryMb, setMemoryMb] = useState(parseInt(searchParams.get('memory_mb') || '0'))
+  const [hours, setHours] = useState(Math.floor(_cloneTimeSec / 3600))
+  const [minutes, setMinutes] = useState(Math.floor((_cloneTimeSec % 3600) / 60))
+  const [account, setAccount] = useState(searchParams.get('account') || '')
+  const [qos, setQos] = useState(searchParams.get('qos') || '')
   const [scriptBody, setScriptBody] = useState(DEFAULT_SCRIPT)
   const [envVars, setEnvVars] = useState<Record<string, string>>({})
 

@@ -88,8 +88,16 @@ async def cancel_job(
 ):
     await _check_job_ownership(job_id, current_user, db)
     try:
+        from datetime import datetime
         client = get_client()
         await client.cancel_job(job_id)
+        # Immediately update DB so job stays in history as CANCELLED
+        job = await crud.get_job(db, job_id)
+        if job:
+            job.state = "CANCELLED"
+            if not job.end_time:
+                job.end_time = datetime.utcnow()
+            await db.commit()
         cache.invalidate_prefix("jobs:")
         cache.invalidate("cluster:overview")
     except Exception as e:
@@ -175,3 +183,22 @@ def _job_to_dict(j) -> dict:
         "qos": j.qos,
         "polled_at": j.polled_at.isoformat() if hasattr(j, "polled_at") and j.polled_at else None,
     }
+
+
+@router.get("/{job_id}/stats")
+async def get_job_stats(
+    job_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return live CPU/memory/GPU utilization for a running job."""
+    job = await crud.get_job(db, job_id)
+    if job and not current_user.is_admin and job.user != current_user.username:
+        raise not_found(f"Job {job_id}")
+
+    client = get_client()
+    try:
+        stats = await client.get_job_stats(job_id)
+        return {"data": stats}
+    except Exception:
+        return {"data": {"cpu_efficiency": None, "memory_rss_mb": None, "gpu_util_pct": None}}

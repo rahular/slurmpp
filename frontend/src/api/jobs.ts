@@ -119,3 +119,12 @@ export function useSubmitJob() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['jobs'] }),
   })
 }
+
+export function useJobStats(jobId: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['job-stats', jobId],
+    queryFn: () => api.get(`/api/v1/jobs/${jobId}/stats`).then((r) => r.data),
+    enabled,
+    refetchInterval: 10_000,
+  })
+}

@@ -140,12 +140,11 @@ async def get_job_detail(job_id: int) -> Job | None:
 
 
 async def cancel_job(job_id: int) -> None:
-    global _submitted_jobs
-    _submitted_jobs = [j for j in _submitted_jobs if j.job_id != job_id]
-    for j in _DEMO_JOBS:
+    for j in _DEMO_JOBS + _submitted_jobs:
         if j.job_id == job_id:
             object.__setattr__(j, 'state', 'CANCELLED')
             object.__setattr__(j, 'end_time', datetime.utcnow())
+            break
 
 
 async def hold_job(job_id: int) -> None:
@@ -217,3 +216,14 @@ async def get_accounting(start_time: str, end_time: str) -> list[dict]:
             },
         })
     return jobs
+
+
+async def get_job_stats(job_id: int) -> dict:
+    for j in _DEMO_JOBS + _submitted_jobs:
+        if j.job_id == job_id and j.state == "RUNNING":
+            return {
+                "cpu_efficiency": round(random.uniform(55, 95), 1),
+                "memory_rss_mb": round(random.uniform(512, j.memory_mb * 0.8 / 1024), 1) if j.memory_mb else None,
+                "gpu_util_pct": round(random.uniform(60, 98), 1) if j.num_gpus else None,
+            }
+    return {"cpu_efficiency": None, "memory_rss_mb": None, "gpu_util_pct": None}
