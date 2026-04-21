@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+.venv/
+venv/
+*.db
+*.db-journal
+
+# Node
+**/node_modules/
+frontend/dist/
+**/.vite/
+
+# Docker / runtime
+demo/backend/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

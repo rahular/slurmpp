@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "slurm-frontend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "C:\\Users\\rahul\\code\\slurm++\\frontend\\node_modules\\.bin\\vite.cmd"],
+      "port": 5173
+    }
+  ]
+}

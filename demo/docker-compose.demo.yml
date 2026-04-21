@@ -1,0 +1,107 @@
+services:
+
+  # ── Demo Slurm cluster (head node + compute, single container) ─────────────
+  slurm-node:
+    build:
+      context: ./slurm
+      dockerfile: Dockerfile
+    hostname: slurm-node
+    container_name: slurmpp-slurm-node
+    restart: unless-stopped
+    privileged: true   # needed for proctrack/linuxproc in Docker
+    volumes:
+      - munge-run:/var/run/munge          # share socket with backend
+      - munge-key:/etc/munge              # share key
+      - slurm-conf:/etc/slurm            # share config
+      - slurm-logs:/var/log/slurm
+    networks:
+      - slurmpp-demo
+    healthcheck:
+      test: ["CMD", "squeue", "--json"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── slurm++ backend (with Slurm CLI tools) ─────────────────────────────────
+  backend:
+    build:
+      context: ..
+      dockerfile: demo/backend/Dockerfile
+    container_name: slurmpp-backend
+    restart: unless-stopped
+    depends_on:
+      slurm-node:
+        condition: service_healthy
+    volumes:
+      - slurm-data:/data
+      - munge-run:/var/run/munge:ro      # use slurm-node's munge socket
+      - munge-key:/etc/munge:ro          # same munge key
+      - slurm-conf:/etc/slurm:ro         # same slurm.conf
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////data/slurmpp.db
+      - SLURM_INTERFACE=cli
+      - JWT_SECRET_KEY=demo-secret-key-for-local-testing
+      - AUTH_BACKEND=local
+      - CORS_ORIGINS=["http://localhost:8080","http://localhost"]
+      - POLL_JOBS_INTERVAL=10
+      - POLL_NODES_INTERVAL=30
+    networks:
+      - slurmpp-demo
+
+  # ── slurm++ frontend ────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: slurmpp-frontend
+    restart: unless-stopped
+    networks:
+      - slurmpp-demo
+
+  # ── nginx reverse proxy ─────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: slurmpp-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - slurmpp-demo
+
+  # ── Job seeder (runs once, submits demo jobs) ───────────────────────────────
+  job-seeder:
+    image: ubuntu:22.04
+    container_name: slurmpp-job-seeder
+    restart: "no"
+    depends_on:
+      slurm-node:
+        condition: service_healthy
+    volumes:
+      - munge-run:/var/run/munge:ro
+      - munge-key:/etc/munge:ro
+      - slurm-conf:/etc/slurm:ro
+      - ./seed-jobs.sh:/seed-jobs.sh:ro
+    command: >
+      bash -c "
+        apt-get update -qq && apt-get install -y -qq slurm-client munge libmunge2 &&
+        chmod +x /seed-jobs.sh && /seed-jobs.sh
+      "
+    networks:
+      - slurmpp-demo
+
+volumes:
+  munge-run:
+  munge-key:
+  slurm-conf:
+  slurm-logs:
+  slurm-data:
+
+networks:
+  slurmpp-demo:
+    driver: bridge

@@ -1,0 +1,47 @@
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    volumes:
+      - slurm_data:/data
+      # Mount Slurm config and MUNGE socket for CLI adapter
+      # Uncomment these on a real cluster:
+      # - /etc/slurm:/etc/slurm:ro
+      # - /var/run/munge:/var/run/munge:ro
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////data/slurmpp.db
+      - SLURM_INTERFACE=${SLURM_INTERFACE:-auto}
+      - SLURM_REST_URL=${SLURM_REST_URL:-http://localhost:6820}
+      - SLURM_REST_TOKEN=${SLURM_REST_TOKEN:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY required}
+      - AUTH_BACKEND=${AUTH_BACKEND:-local}
+      - LDAP_URL=${LDAP_URL:-}
+      - LDAP_BASE_DN=${LDAP_BASE_DN:-}
+      - LDAP_USER_DN_TEMPLATE=${LDAP_USER_DN_TEMPLATE:-uid={username},ou=people,{base_dn}}
+      - LDAP_ADMIN_GROUP_DN=${LDAP_ADMIN_GROUP_DN:-}
+      - CORS_ORIGINS=["http://localhost:80","http://localhost"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "${PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  slurm_data:

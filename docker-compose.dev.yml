@@ -1,0 +1,29 @@
+# Development overrides — use with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend/app:/app/app  # hot-reload via uvicorn --reload
+      - slurm_data:/data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"  # expose directly for debugging
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////data/slurmpp.db
+      - SLURM_INTERFACE=cli
+      - JWT_SECRET_KEY=dev-secret-do-not-use-in-production
+      - AUTH_BACKEND=local
+      - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+
+  frontend:
+    # In dev, run Vite directly (with npm run dev) instead of building
+    # Frontend runs on port 5173 with its own proxy to backend
+    profiles: ["skip"]  # skip in dev — run 'npm run dev' manually
+
+  nginx:
+    profiles: ["skip"]  # skip in dev — no nginx needed
+
+volumes:
+  slurm_data:
