@@ -40,6 +40,17 @@ def _parse_gres_gpus(gres_str: str) -> int:
     return int(match.group(1)) if match else 0
 
 
+def _uid_to_username(uid: int | None) -> str:
+    """Resolve UID to username via /etc/passwd."""
+    if not uid:
+        return ""
+    try:
+        import pwd
+        return pwd.getpwuid(uid).pw_name
+    except (KeyError, ImportError):
+        return str(uid)
+
+
 async def get_jobs(user: str | None = None) -> list[Job]:
     cmd = ["squeue", "--json"]
     if user:
@@ -47,19 +58,20 @@ async def get_jobs(user: str | None = None) -> list[Job]:
     raw = json.loads(await _run(cmd))
     jobs = []
     for j in raw.get("jobs", []):
-        tres_alloc = j.get("tres_req_str", "") or j.get("tres_alloc_str", "")
+        # Some Slurm versions return empty user_name; fall back to uid lookup
+        username = j.get("user_name") or _uid_to_username(j.get("user_id"))
         jobs.append(Job(
             job_id=j["job_id"],
             array_job_id=j.get("array_job_id") or None,
             array_task_id=j.get("array_task_id") if isinstance(j.get("array_task_id"), int) and j.get("array_task_id") >= 0 else None,
-            user=j.get("user_name", ""),
+            user=username,
             account=j.get("account", ""),
             partition=j.get("partition", ""),
             name=j.get("name", ""),
             state=j.get("job_state", "UNKNOWN"),
             state_reason=j.get("state_reason", ""),
-            num_cpus=j.get("cpus", {}).get("number", 0) if isinstance(j.get("cpus"), dict) else j.get("cpus", 0),
-            num_nodes=j.get("node_count", {}).get("number", 0) if isinstance(j.get("node_count"), dict) else j.get("node_count", 0),
+            num_cpus=j.get("cpus", {}).get("number", 0) if isinstance(j.get("cpus"), dict) else (j.get("cpus") or 0),
+            num_nodes=j.get("node_count", {}).get("number", 0) if isinstance(j.get("node_count"), dict) else (j.get("node_count") or 0),
             num_gpus=_parse_gres_gpus(j.get("gres_detail", [""])[0] if j.get("gres_detail") else ""),
             memory_mb=j.get("memory_per_node", {}).get("number", 0) if isinstance(j.get("memory_per_node"), dict) else 0,
             time_limit_seconds=(j.get("time_limit", {}).get("number", 0) or 0) * 60 if isinstance(j.get("time_limit"), dict) else None,
@@ -140,7 +152,7 @@ async def get_job_detail(job_id: int) -> Job | None:
         j = jobs[0]
         return Job(
             job_id=j["job_id"],
-            user=j.get("user_name", ""),
+            user=j.get("user_name") or _uid_to_username(j.get("user_id")),
             account=j.get("account", ""),
             partition=j.get("partition", ""),
             name=j.get("name", ""),

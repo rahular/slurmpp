@@ -14,7 +14,6 @@ frontend/dist/
 **/.vite/
 
 # Docker / runtime
-demo/backend/
 *.log
 
 # IDE
