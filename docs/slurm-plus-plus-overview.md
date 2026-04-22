@@ -83,7 +83,7 @@ Slurm++ is a lightweight, self-hosted web dashboard that sits on top of any exis
 
 ### 4.1 Job Dashboard
 
-`> Screenshot: Job list showing RUNNING, PENDING, COMPLETED, FAILED, CANCELLED jobs`
+![Job list showing all job states](screenshots/01-job-list.png)
 
 The main job view shows all jobs across the cluster with live status updates (polling every 10 seconds). Each job shows:
 
@@ -98,7 +98,7 @@ The main job view shows all jobs across the cluster with live status updates (po
 
 ### 4.2 Job Detail & Real-Time Metrics
 
-`> Screenshot: Job detail page showing resource utilization gauges`
+![Job detail page with live resource utilization panel](screenshots/05-job-detail.png)
 
 Clicking any job opens a detail view with:
 
@@ -117,7 +117,7 @@ Clicking any job opens a detail view with:
 
 ### 4.3 Real-Time Log Viewer
 
-`> Screenshot: Log viewer streaming output for a running job`
+![Output log tab streaming job output in real time](screenshots/06-job-logs.png)
 
 For running jobs, clicking **View Logs** opens a live-streaming log panel backed by Server-Sent Events (SSE). Logs tail in real time without needing to SSH into the cluster — useful for monitoring training runs, checking for errors mid-job, or confirming a job has started correctly.
 
@@ -125,7 +125,7 @@ For running jobs, clicking **View Logs** opens a live-streaming log panel backed
 
 ### 4.4 Job Submission
 
-`> Screenshot: Job submission form`
+![Guided multi-step job submission form](screenshots/04-submit-form.png)
 
 A guided form for submitting jobs removes the need to write `#SBATCH` headers manually. Fields include:
 
@@ -141,7 +141,9 @@ The form validates inputs before submission and surfaces Slurm errors clearly.
 
 ### 4.5 Clone Job
 
-`> Screenshot: Clone button on job detail, then pre-filled submission form`
+![Clone Job button on job detail page](screenshots/07-clone-button.png)
+
+![Submit form pre-filled from cloned job configuration](screenshots/08-clone-prefilled.png)
 
 Any job — whether completed, failed, or cancelled — can be cloned with one click. The submission form opens pre-filled with the original job's configuration, allowing the user to tweak parameters (e.g. increase memory, change partition) and resubmit immediately.
 
@@ -152,9 +154,9 @@ This is particularly useful when:
 
 ---
 
-### 4.6 Node Grid
+### 4.6 Cluster Dashboard & Node Grid
 
-`> Screenshot: Node grid with color-coded utilization`
+![Cluster dashboard showing live node status, CPU utilization, and running/pending job counts](screenshots/02-node-grid.png)
 
 The cluster node grid gives an at-a-glance view of the entire cluster. Each node is color-coded by utilization:
 
@@ -173,7 +175,7 @@ Hovering a node shows its name, allocated vs. total CPUs, and memory. This view 
 
 ### 4.7 Admin Dashboard
 
-`> Screenshot: Admin dashboard heatmap`
+![Admin dashboard showing utilization heatmap, low-efficiency jobs, and user management](screenshots/03-admin-heatmap.png)
 
 Administrators see an additional dashboard with:
 
@@ -188,8 +190,6 @@ Data is sampled every 30 seconds by the background poller and aggregated by hour
 
 #### Low Efficiency Jobs
 
-`> Screenshot: Low efficiency jobs panel with warning indicators`
-
 A live table of currently running jobs with <50% CPU efficiency. This is the single most impactful feature for platform teams — on most shared clusters, 20–40% of allocated CPU-hours are wasted by jobs that request far more resources than they use.
 
 For each inefficient job, admins can:
@@ -199,8 +199,6 @@ For each inefficient job, admins can:
 - (Future) Send an automated efficiency alert to the user
 
 #### User Management
-
-`> Screenshot: Admin user management panel`
 
 Admins can add and remove dashboard users directly from the UI. When a new user is created:
 1. Their account is created in the dashboard database (for login)
